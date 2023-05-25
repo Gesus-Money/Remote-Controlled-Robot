@@ -1,0 +1,392 @@
+
+                                                                                
+#include <Servo.h>         
+ 
+Servo servoLeft;                       
+Servo servoRight;
+ 
+const int ServoLeftPin = 13;               
+const int ServoRightPin = 12;
+const int IrDetLeftPin = 10;
+const int IrDetPin = 10;
+const int IrLedLeftPin = 9;
+const int LedLeftPin = 8;   
+const int LedRightPin = 7;
+const int BeeperPin = 4;
+const int IrDetRightPin = 3;
+const int IrLedRightPin = 2;
+
+
+const byte Enter = 11;                       
+const byte ChUp = 16;
+const byte ChDn = 17;
+const byte VolUp = 18;
+const byte VolDn = 19;
+const byte Power = 21;
+
+const int setpoint = 2;                     
+const int kpl = -50;                       
+const int kpr = -50;
+ 
+int irPulse;                              
+int remoteCode;                           
+int mode = 1;                              
+
+void setup()                               
+{
+  tone(BeeperPin, 3000, 1000);              
+  delay(1000);                          
+  
+  pinMode(LedLeftPin, OUTPUT);               
+  pinMode(LedRightPin, OUTPUT);
+
+  Serial.begin(9600);
+}
+
+void loop()                                  
+{
+  int remoteCode = GetIrCode();             
+
+  Serial.print("remoteCode = ");
+  Serial.println(remoteCode);
+ 
+  if(remoteCode == -1)                    
+  {
+    if((servoLeft.attached()==true) && (servoRight.attached()==true))
+    {
+      servoLeft.detach();
+      servoRight.detach();
+    }
+  }
+  else                                      
+  {                                         
+    if((servoLeft.attached()==false) && (servoRight.attached()==false))
+    {
+      servoLeft.attach(ServoLeftPin);
+      servoRight.attach(ServoRightPin);
+    }
+  }  
+  
+  delay(10); 
+  
+  int irl=irDetect(IrLedLeftPin, IrDetLeftPin, 38000);             
+  delay(1);                                 
+  int irr=irDetect(IrLedRightPin,  IrDetRightPin, 38000);           
+
+  switch(remoteCode)                         
+  {
+    case 1:                                  
+      if(irr==0)                            
+      {
+        maneuver(0, 0);                    
+        digitalWrite(LedRightPin, HIGH);
+        tone(BeeperPin, 4500, 20);
+        delay(50);
+        digitalWrite(LedRightPin, LOW);
+        delay(50);
+      }
+      else                                 
+      {
+        maneuver(0, 200, 20);               
+      }  
+      break;                               
+      
+    case 2:                                 
+    case ChUp:                             
+      if((irl == 0)&&(irr==0))            
+      {
+        maneuver(0, 0);
+        digitalWrite(LedLeftPin, HIGH);
+        digitalWrite(LedRightPin, HIGH);
+        tone(BeeperPin, 4500, 20);
+        delay(50);
+        digitalWrite(LedLeftPin, LOW);
+        digitalWrite(LedRightPin, LOW);
+        delay(50);
+      }
+      else                                  
+      {
+        maneuver(200, 200, 20);
+      }  
+      break;
+      
+    case 3:                                
+      if(irl==0)                           
+      {
+        maneuver(0, 0);
+        digitalWrite(LedLeftPin, HIGH);
+        tone(BeeperPin, 4500, 20);
+        delay(50);
+        digitalWrite(LedLeftPin, LOW);
+        delay(50);
+      }
+      else                              
+      {
+        maneuver(200, 0, 20);            
+      }  
+      break;
+      
+    case 4:                          
+    case VolDn:                          
+      maneuver(-200, 200, 20);           
+      break;
+      
+    case 5:                              
+      maneuver(0, 0, 20);               
+      break;
+      
+    case 6:                           
+    case VolUp:                          
+      maneuver(200, -200, 20);           
+      break;
+      
+    case 7:                              
+      maneuver(0, -200, 20);             
+      break;
+      
+    case 8:                               
+    case ChDn:                           
+      maneuver(-200, -200, 20);          
+      break;
+      
+    case 9:                               
+      maneuver(-200, -0, 20);             
+      break;
+      
+   
+    case Power:                            
+      mode = -1;                         
+      servoLeft.detach();                  
+      servoRight.detach();
+      tone(BeeperPin, 3500, 100);         
+      delay(200);                         
+
+      do                                   
+      {
+        mode = GetIrCode();
+      }while((mode == -1) || (mode == Power)); 
+   
+      
+      tone(BeeperPin, 3500, 100);        
+      delay(200);
+      tone(BeeperPin, 3500, 100);
+      delay(200);
+      
+      switch(mode)                         
+      {
+        case 2:                          
+          roam();
+          break;
+        case 3:                         
+          follow();
+          break;
+        case 6:                           
+          sniff();
+          break;
+        default:                         
+          mode = 1;
+          break;
+      }
+   
+    default:                               
+      servoLeft.detach();                
+      servoRight.detach();
+      break;
+  }   
+}                                          
+
+
+
+void roam()
+{
+  int irCode = -1;                             
+  servoLeft.attach(ServoLeftPin);             
+  servoRight.attach(ServoRightPin);
+  while(irCode == -1)                       
+  {
+    irCode = GetIrCode();                      
+    if(irCode==-1)                              
+    {
+      int irLeft = irDetect(IrLedLeftPin, IrDetLeftPin, 38000);      
+      int irRight = irDetect(IrLedRightPin, IrDetRightPin, 38000);     
+
+      if((irLeft == 0) && (irRight == 0))      
+      {
+        maneuver(-200, -200, 1);               
+      }
+      else if(irLeft == 0)                    
+      {
+        maneuver(200, -200, 1);                  
+      }
+      else if(irRight == 0)                     
+      {
+        maneuver(-200, 200, 1);                  
+      }
+      else                                       
+      {
+        maneuver(200, 200, 1);                  
+      }
+    }                               
+    else                                        
+    {
+      mode = 1;                                
+      digitalWrite(LedLeftPin, LOW);            
+      digitalWrite(LedRightPin, LOW);
+      return;                                  
+    }
+  }  
+} 
+
+
+void sniff()
+{
+  servoLeft.attach(ServoLeftPin);               
+  servoRight.attach(ServoRightPin);
+  while(1)                                      
+  {
+      int irLeft = digitalRead(IrDetLeftPin);      
+      int irRight = digitalRead(IrLedRightPin);       
+
+      if(irLeft == 0)                    
+      {
+        tone(BeeperPin, 3000, 500);               
+      }
+      if(irRight == 0)                     
+      {
+        tone(BeeperPin, 4000, 500);              
+      }
+      delay(500);                             
+  }  
+} 
+
+
+
+void follow()                                       
+{
+  int irCode = -1;                               
+  servoLeft.attach(ServoLeftPin);                         
+  servoRight.attach(ServoRightPin);
+
+ 
+  while(irCode == -1)                            
+  {
+    irCode = GetIrCode();                       
+    if(irCode==-1)                               
+    {
+      int irLeft = irDistance(IrLedLeftPin, IrDetLeftPin);     
+      int irRight = irDistance(IrLedRightPin, IrDetRightPin);
+  
+    
+      int driveLeft = (setpoint - irLeft) * kpl;     
+      int driveRight = (setpoint - irRight) * kpr;
+  
+      maneuver(driveLeft, driveRight, 1);       
+    }
+    else                                       
+    {
+      mode = 1;                                
+      digitalWrite(LedLeftPin, LOW);           
+      digitalWrite(LedRightPin, LOW);
+      return;                                   
+    }
+    delay(20);
+  }  
+} 
+
+int irDistance(int irLedPin, int irReceivePin)
+{  
+  int distance = 0;
+  for(long f = 38000; f <= 42000; f += 1000) {
+    distance += irDetect(irLedPin, irReceivePin, f);
+
+  }
+  return distance;
+}
+
+int irDetect(int irLedPin, int irReceiverPin, long frequency)
+{
+  tone(irLedPin, frequency, 8);             
+  delay(1);                                  
+  int ir = digitalRead(irReceiverPin);       
+  if(irLedPin==IrLedLeftPin)                           
+  { 
+    if(ir==0)                               
+    {
+      digitalWrite(LedLeftPin, HIGH);        
+    }
+    else                                   
+    {
+      digitalWrite(LedLeftPin, LOW);         
+    }
+  }
+  if(irLedPin==IrLedRightPin)               
+  { 
+    if(ir==0)
+    {
+      digitalWrite(LedRightPin, HIGH);
+    }
+    else
+    {
+      digitalWrite(LedRightPin, LOW);
+    }
+  }
+  delay(1);                                 
+  return ir;                                
+}     
+
+int GetIrCode(){
+  unsigned long irPulse = -1;               
+  int irCode = 0;
+  do{
+    
+    if((mode==3)||(mode==2)) irPulse = pulseIn(IrDetPin, LOW, 15000); else irPulse = pulseIn(IrDetPin, LOW, 50000); 
+
+     
+    if(irPulse==0) return -1;
+  }while((irPulse <= 2000) || (irPulse >= 2800));
+ 
+  
+  Serial.println(irPulse, DEC);
+
+  
+
+  for(int i = 0; i <= 6; i++)
+  {
+    irPulse = pulseIn(IrDetPin, LOW, 2000);
+    if((irPulse > 1000) && (irPulse < 1400)) bitSet(irCode, i);
+    
+    Serial.println(irPulse, DEC);
+    
+  }
+
+ 
+  if(irCode <= 9) irCode++;
+  if(irCode == 10) irCode = 0;
+
+  
+  Serial.print("IR=");
+  Serial.println(irCode);
+
+  
+  return irCode;
+}
+
+
+void maneuver(int speedLeft, int speedRight)
+{
+  
+  maneuver(speedLeft, speedRight, 1);              
+}
+
+
+void maneuver(int speedLeft, int speedRight, int msTime)
+{
+  servoLeft.writeMicroseconds(1500 + speedLeft);   
+  servoRight.writeMicroseconds(1500 - speedRight); 
+  if(msTime==-1)                                  
+  {                                  
+    servoLeft.detach();                          
+    servoRight.detach();   
+  }
+  delay(msTime);                                  
+}
